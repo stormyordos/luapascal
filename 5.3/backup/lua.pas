@@ -113,7 +113,7 @@ const
      LUA_VERSION_MAJOR     = '5';
      LUA_VERSION_MINOR     = '3';
      LUA_VERSION_NUM       = 503;
-     LUA_VERSION_RELEASE   = '4';
+     LUA_VERSION_RELEASE   = '0 (work1)';
 
 
      LUA_VERSION_          = 'Lua '+LUA_VERSION_MAJOR+'.'+LUA_VERSION_MINOR;
