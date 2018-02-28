@@ -113,12 +113,12 @@ const
      LUA_VERSION_MAJOR     = '5';
      LUA_VERSION_MINOR     = '3';
      LUA_VERSION_NUM       = 503;
-     LUA_VERSION_RELEASE   = '0 (work1)';
+     LUA_VERSION_RELEASE   = '4';
 
 
      LUA_VERSION_          = 'Lua '+LUA_VERSION_MAJOR+'.'+LUA_VERSION_MINOR;
      LUA_RELEASE           = LUA_VERSION_+'.'+LUA_VERSION_RELEASE;
-     LUA_COPYRIGHT         = LUA_RELEASE+' Copyright (C) 1994-2012 Lua.org, PUC-Rio';
+     LUA_COPYRIGHT         = LUA_RELEASE+' Copyright (C) 1994-2017 Lua.org, PUC-Rio';
      LUA_AUTHORS           = 'R. Ierusalimschy, L. H. de Figueiredo, W. Celes';
 
 
@@ -141,10 +141,8 @@ const
      LUAI_MAXSTACK         = 1000000; //C value : 15000
 {$ENDIF}
 
-     LUAI_FIRSTPSEUDOIDX   = (-LUAI_MAXSTACK - 1000);
-
      (* pseudo-indices *)
-     LUA_REGISTRYINDEX     = LUAI_FIRSTPSEUDOIDX;
+     LUA_REGISTRYINDEX     = (-LUAI_MAXSTACK - 1000);
 
 
      (* Lua error constants *)
@@ -341,7 +339,9 @@ type
      PLua_Unsigned   = ^lua_Unsigned;
 
      lua_State       = pointer;
+     lua_KContext    = integer;
      lua_CFunction   = function (L : lua_State) : integer; cdecl;
+     lua_KFunction   = function (L : lua_State; status : integer; ctx : lua_KContext) : integer; cdecl;
 
      (* functions that read/write blocks when loading/dumping Lua chunks *)
      lua_Reader      = function (L : lua_State; ud : pointer; sz : PSize_t) : PAnsiChar; cdecl;
@@ -349,8 +349,10 @@ type
 
      (* prototype for memory-allocation functions *)
      lua_Alloc       = function (ud, ptr : pointer; osize, nsize : size_t) : pointer; cdecl;
+     lua_Hook        = procedure(L : lua_State; ar : PLua_Debug); cdecl;
 
 
+     PLua_Debug      = ^lua_Debug;
      lua_Debug       =
      packed record
             event           : longint;
@@ -414,18 +416,26 @@ var
      lua_gettop      : function (L : lua_State) : integer; cdecl;
      lua_settop      : procedure(L : lua_State; idx : integer); cdecl;
      lua_pushvalue   : procedure(L : lua_State; idx : integer); cdecl;
+     lua_rotate      : procedure(L : lua_State; idx, n : integer); cdecl;
      lua_remove      : procedure(L : lua_State; idx : integer); cdecl;
      lua_insert      : procedure(L : lua_State; idx : integer); cdecl;
      lua_replace     : procedure(L : lua_State; idx : integer); cdecl;
      lua_copy        : procedure(L : lua_State; fromidx, toidx : integer); cdecl;
-     lua_checkstack  : function (L : lua_State; sz : integer) : integer; cdecl;
+     lua_checkstack  : function (L : lua_State; n : integer) : integer; cdecl;
      lua_xmove       : procedure(from, to_ : lua_State; n : integer); cdecl;
+     lua_getstack    : function (L : lua_State; level : integer; ar : PLua_Debug) : integer; cdecl;
+     lua_getinfo     : function (L : lua_State; what : PAnsiChar; ar : PLua_Debug) : integer; cdecl;
+
+     lua_gethookmask : function (L : lua_State) : integer; cdecl;
+     lua_gethookcount: function (L : lua_State) : integer; cdecl;
+     lua_sethook     : procedure(L : lua_State; func : lua_Hook; mask, count : integer); cdecl;
+     lua_gethook     : function (L : lua_State) : lua_Hook; cdecl;
 
      (* access functions (stack -> C) *)
      lua_isnumber    : function (L : lua_State; idx : integer) : integer; cdecl;
      lua_isstring    : function (L : lua_State; idx : integer) : integer; cdecl;
-     lua_isinteger   : function (L : lua_State; idx : integer) : integer; cdecl;
      lua_iscfunction : function (L : lua_State; idx : integer) : integer; cdecl;
+     lua_isinteger   : function (L : lua_State; idx : integer) : integer; cdecl;
      lua_isuserdata  : function (L : lua_State; idx : integer) : integer; cdecl;
      lua_type        : function (L : lua_State; idx : integer) : integer; cdecl;
      lua_typename    : function (L : lua_State; tp : integer) : PAnsiChar; cdecl;
@@ -439,6 +449,7 @@ var
      lua_touserdata  : function (L : lua_State; idx : integer) : pointer; cdecl;
      lua_tothread    : function (L : lua_State; idx : integer) : lua_State; cdecl;
      lua_topointer   : function (L : lua_State; idx : integer) : pointer; cdecl;
+     lua_stringtonumber : function (L : lua_State; s : PAnsiChar) : size_t; cdecl;
 
      (* arithmetic functions *)
      lua_arith       : procedure(L : lua_State; op : integer); cdecl;
@@ -460,21 +471,23 @@ var
      lua_pushthread  : function (L : lua_State) : integer; cdecl;
 
      (* get functions (Lua -> stack) *)
-     lua_getglobal   : procedure(L : lua_State; var_ : PAnsiChar); cdecl;
-     lua_gettable    : procedure(L : lua_State; idx : integer); cdecl;
-     lua_getfield    : procedure(L : lua_State; idx : integer; k : PAnsiChar); cdecl;
-     lua_rawget      : procedure(L : lua_State; idx : integer); cdecl;
-     lua_rawgeti     : procedure(L : lua_State; idx : integer; n : lua_Integer); cdecl;
-     lua_rawgetp     : procedure(L : lua_State; idx : integer; p : pointer); cdecl;
+     lua_getglobal   : function (L : lua_State; var_ : PAnsiChar) : integer; cdecl;
+     lua_gettable    : function (L : lua_State; idx : integer) : integer; cdecl;
+     lua_getfield    : function (L : lua_State; idx : integer; k : PAnsiChar) : integer; cdecl;
+     lua_geti        : function (L : lua_State; idx : integer; n : lua_Integer) : integer; cdecl;
+     lua_rawget      : function (L : lua_State; idx : integer) : integer; cdecl;
+     lua_rawgeti     : function (L : lua_State; idx : integer; n : lua_Integer) : integer; cdecl;
+     lua_rawgetp     : function (L : lua_State; idx : integer; p : pointer) : integer; cdecl;
      lua_createtable : procedure(L : lua_State; narr, nrec : integer); cdecl;
      lua_newuserdata : function (L : lua_State; sz : size_t) : pointer; cdecl;
      lua_getmetatable: function (L : lua_State; objindex : integer) : integer; cdecl;
-     lua_getuservalue: procedure(L : lua_State; idx : integer); cdecl;
+     lua_getuservalue: function (L : lua_State; idx : integer) : integer; cdecl;
 
      (* set functions (stack -> Lua) *)
      lua_setglobal   : procedure(L : lua_State; var_ : PAnsiChar); cdecl;
      lua_settable    : procedure(L : lua_State; idx : integer); cdecl;
      lua_setfield    : procedure(L : lua_State; idx : integer; k : PAnsiChar); cdecl;
+     lua_seti        : procedure(L : lua_State; idx : integer; k : PAnsiChar); cdecl;
      lua_rawset      : procedure(L : lua_State; idx : integer); cdecl;
      lua_rawseti     : procedure(L : lua_State; idx : integer; n : lua_Integer); cdecl;
      lua_rawsetp     : procedure(L : lua_State; idx : integer; p : pointer); cdecl;
@@ -482,20 +495,21 @@ var
      lua_setuservalue: procedure(L : lua_State; idx : integer); cdecl;
 
      (* 'load' and 'call' functions (load and run Lua code) *)
-     lua_call        : procedure(L : lua_State; nargs, nresults : integer; ctx : integer = 0;        //!\\
-                                 k : lua_CFunction = nil); cdecl;
+     lua_call        : procedure(L : lua_State; nargs, nresults : integer; ctx : lua_KContext = 0;        //!\\
+                                 k : lua_KFunction = nil); cdecl;
      lua_getctx      : function (L : lua_State; ctx : PInteger) : integer; cdecl;
      lua_pcall       : function (L : lua_State; nargs, nresults, errfunc : integer;
-                                 ctx : integer = 0; k : lua_CFunction = nil) : integer; cdecl;    //!\\
+                                 ctx : lua_KContext = 0; k : lua_KFunction = nil) : integer; cdecl;    //!\\
      lua_load        : function (L : lua_State; reader : lua_Reader; dt : pointer;
                                  chunkname, mode : PAnsiChar) : integer; cdecl;
-     lua_dump        : function (L : lua_State; write : lua_Writer; data : pointer) : integer; cdecl;
+     lua_dump        : function (L : lua_State; writer : lua_Writer; data : pointer; strip: integer) : integer; cdecl;
 
      (* coroutine functions *)
-     lua_yield       : function (L : lua_State; nresults : integer; ctx : integer = 0;
-                                 k : lua_CFunction = nil) : integer; cdecl;                //!\\
+     lua_yield       : function (L : lua_State; nresults : integer; ctx : lua_KContext = 0;
+                                 k : lua_KFunction = nil) : integer; cdecl;                //!\\
      lua_resume      : function (L, from : lua_State; narg : integer) : integer; cdecl;
      lua_status      : function (L : lua_State) : integer; cdecl;
+     lua_isyieldable : function (L : lua_State) : integer; cdecl;
 
      (* garbage collection *)
      lua_gc          : function (L : lua_State; what, data : integer) : integer; cdecl;
@@ -508,6 +522,13 @@ var
      lua_strtonum    : function (L : lua_State; s : PAnsiChar; len : size_t) : integer; cdecl;
      lua_getallocf   : function (L : lua_State; ud : PPointer) : lua_Alloc; cdecl;
      lua_setallocf   : procedure(L : lua_State; f : lua_Alloc; ud : pointer); cdecl;
+     lua_upvalueid   : function (L : lua_State; fidx, n : integer) : pointer; cdecl;
+     lua_upvaluejoin : procedure(L : lua_State; fidx1, n1, fidx2, n2 : integer); cdecl;
+     lua_getlocal    : function (L : lua_State; ar : PLua_Debug; n : integer) : PAnsiChar; cdecl;
+     lua_setlocal    : function (L : lua_State; ar : PLua_Debug; n : integer) : PAnsiChar; cdecl;
+     lua_getupvalue  : function (L : lua_State; funcindex, n : integer) : PAnsiChar; cdecl;
+
+
 
 
      (* opening packages *)
@@ -807,7 +828,7 @@ end;
 
 function lua_pushliteral(L : lua_State; const s : ansistring) : PAnsiChar; inline;
 begin
-     Result := lua_pushlstring(L, PAnsiChar(s), length(s));
+     Result := lua_pushstring(L, PAnsiChar(s));
 end;
 
 
@@ -1287,6 +1308,7 @@ begin
      lua_getglobal           := GetProcAddress(libHandle, 'lua_getglobal');
      lua_gettable            := GetProcAddress(libHandle, 'lua_gettable');
      lua_getfield            := GetProcAddress(libHandle, 'lua_getfield');
+     lua_geti                := GetProcAddress(libHandle, 'lua_geti');
      lua_rawget              := GetProcAddress(libHandle, 'lua_rawget');
      lua_rawgeti             := GetProcAddress(libHandle, 'lua_rawgeti');
      lua_rawgetp             := GetProcAddress(libHandle, 'lua_rawgetp');
@@ -1316,6 +1338,7 @@ begin
      lua_yield               := GetProcAddress(libHandle, 'lua_yieldk');
      lua_resume              := GetProcAddress(libHandle, 'lua_resume');
      lua_status              := GetProcAddress(libHandle, 'lua_status');
+     lua_isyieldable         := GetProcAddress(libHandle, 'lua_isyieldable');
 
      (* garbage collection *)
      lua_gc                  := GetProcAddress(libHandle, 'lua_gc');
