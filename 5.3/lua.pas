@@ -1118,7 +1118,7 @@ end;
 
 
 //
-// Register a new Lua Function and map it to the Objects methoif (assigned(CallBack) and assigned(CallBack.Exec)) thend name
+// Register a new Lua Function and map it to the Objects method name
 //
 // @param       AnsiString      FuncName        Lua Function Name
 // @param       AnsiString      MethodName      (optional) Objects Method name
@@ -1164,7 +1164,7 @@ begin
 end;
 
 //
-// UnRegister all new Lua Function
+// Unregister all new Lua Functions
 //
 // @param       TObject     Object      Object with prev registered lua functions
 //
@@ -1237,7 +1237,7 @@ begin
 end;
 {$ENDIF}
 
-//no try-except blocks in order to prune the SysUtils unit from uses clause
+
 function LoadLuaLibrary(const libName : string = '') : boolean;
 begin
      Result      := false;
